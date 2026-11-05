@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "Designer Costume Studio",
+    "slug": "designer-costume-studio",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#F8F6F2"
+      }
+    }
+  }
+}

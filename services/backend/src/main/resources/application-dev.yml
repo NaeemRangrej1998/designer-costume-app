@@ -1,0 +1,7 @@
+logging:
+  level:
+    org.hibernate.SQL: DEBUG
+
+app:
+  auth:
+    cookie-secure: false
