@@ -31,9 +31,32 @@ public interface CostumeRepository extends JpaRepository<CostumeEntity, UUID> {
 
     Optional<CostumeEntity> findBySku(String sku);
 
+    @Query(
+            value = """
+                    SELECT c FROM CostumeEntity c
+                    WHERE (:search = '' OR LOWER(c.name) LIKE LOWER(CONCAT('%', :search, '%'))
+                           OR LOWER(c.sku) LIKE LOWER(CONCAT('%', :search, '%')))
+                      AND (:categoryId IS NULL OR c.category.id = :categoryId)
+                      AND (:active IS NULL OR c.active = :active)
+                    """,
+            countQuery = """
+                    SELECT COUNT(c) FROM CostumeEntity c
+                    WHERE (:search = '' OR LOWER(c.name) LIKE LOWER(CONCAT('%', :search, '%'))
+                           OR LOWER(c.sku) LIKE LOWER(CONCAT('%', :search, '%')))
+                      AND (:categoryId IS NULL OR c.category.id = :categoryId)
+                      AND (:active IS NULL OR c.active = :active)
+                    """)
+    Page<CostumeEntity> findAdminCostumes(
+            @Param("search") String search,
+            @Param("categoryId") UUID categoryId,
+            @Param("active") Boolean active,
+            Pageable pageable);
+
     List<CostumeEntity> findByNameContainingIgnoreCase(String name);
 
     boolean existsByIdAndActiveTrue(UUID id);
+
+    boolean existsByCategoryIdAndActiveTrue(UUID categoryId);
 
     @Query(
             value = """

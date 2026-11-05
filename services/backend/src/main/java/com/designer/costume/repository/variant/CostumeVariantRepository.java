@@ -5,6 +5,8 @@ import com.designer.costume.entity.variant.CostumeVariantEntity;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import com.designer.costume.entity.variant.ColorEntity;
+import com.designer.costume.entity.variant.SizeEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -25,6 +27,16 @@ public interface CostumeVariantRepository extends JpaRepository<CostumeVariantEn
     long countAvailableVariantsForActiveCatalog();
 
     Optional<CostumeVariantEntity> findBySku(String sku);
+
+    @Query("""
+            SELECT variant
+            FROM CostumeVariantEntity variant
+            JOIN FETCH variant.color
+            JOIN FETCH variant.size
+            WHERE variant.costume.id = :costumeId
+            ORDER BY variant.color.name, variant.size.displayOrder, variant.size.name
+            """)
+    List<CostumeVariantEntity> findAllByCostumeId(@Param("costumeId") UUID costumeId);
 
     Optional<CostumeVariantEntity> findByCostumeIdAndColorIdAndSizeId(
             UUID costumeId, UUID colorId, UUID sizeId);

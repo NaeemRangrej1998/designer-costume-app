@@ -7,7 +7,7 @@ import PageHeader from "@/components/common/PageHeader";
 import Pagination from "@/components/common/Pagination";
 import ProtectedRoute from "@/components/common/ProtectedRoute";
 import { getCategories } from "@/services/api/categoryApi";
-import { getCostumes } from "@/services/api/costumeApi";
+import { deactivateCostume, getAdminCostumes } from "@/services/api/costumeApi";
 import { getApiErrorMessage } from "@/services/api/apiClient";
 import { useAuth } from "@/context/AuthContext";
 
@@ -16,7 +16,7 @@ const priceFormat = new Intl.NumberFormat(undefined, {
   maximumFractionDigits: 2,
 });
 
-const columns = [
+const baseColumns = [
   { key: "name", label: "Costume", render: (row) => <Link className="text-link" href={`/admin/costumes/${row.id}`}>{row.name}</Link> },
   { key: "sku", label: "SKU" },
   { key: "categoryName", label: "Category" },
@@ -32,7 +32,7 @@ const columns = [
       ? <a className="text-link" href={row.primaryImageUrl} target="_blank" rel="noreferrer">View image ↗</a>
       : <span className="muted">—</span>,
   },
-  { key: "status", label: "Status", render: () => <span className="status-pill status-active">Active</span> },
+  { key: "active", label: "Status", render: (row) => <span className={`status-pill ${row.active ? "status-active" : "status-inactive"}`}>{row.active ? "Active" : "Inactive"}</span> },
 ];
 
 export default function CostumesPage() {
@@ -43,8 +43,10 @@ export default function CostumesPage() {
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [activeFilter, setActiveFilter] = useState("true");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [actionError, setActionError] = useState("");
   const [categoryError, setCategoryError] = useState("");
   const canViewCategories = can("CATEGORY_VIEW");
 
@@ -67,7 +69,14 @@ export default function CostumesPage() {
     const controller = new AbortController();
     setLoading(true);
     setError("");
-    getCostumes({ page, size: 10, search: query, categoryId, signal: controller.signal })
+    getAdminCostumes({
+      page,
+      size: 10,
+      search: query,
+      categoryId,
+      active: activeFilter === "" ? undefined : activeFilter === "true",
+      signal: controller.signal,
+    })
       .then(setPageData)
       .catch((requestError) => {
         if (!controller.signal.aborted) setError(getApiErrorMessage(requestError, "Could not load costumes."));
@@ -76,7 +85,7 @@ export default function CostumesPage() {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [page, query, categoryId]);
+  }, [page, query, categoryId, activeFilter]);
 
   function submitSearch(event) {
     event.preventDefault();
@@ -84,12 +93,44 @@ export default function CostumesPage() {
     setQuery(search.trim());
   }
 
+  async function handleDeactivate(costume) {
+    if (!window.confirm(`Deactivate ${costume.name}?`)) return;
+    setActionError("");
+    try {
+      await deactivateCostume(costume.id);
+      setPageData((current) => ({
+        ...current,
+        content: current.content.filter((item) => item.id !== costume.id),
+        totalElements: Math.max(0, current.totalElements - 1),
+      }));
+    } catch (requestError) {
+      setActionError(getApiErrorMessage(requestError, "Costume could not be deactivated."));
+    }
+  }
+
+  const columns = [
+    ...baseColumns,
+    {
+      key: "actions",
+      label: "Actions",
+      render: (row) => (
+        <div className="table-actions">
+          {can("COSTUME_UPDATE") && <Link className="text-link" href={`/admin/costumes/${row.id}/edit`}>Edit</Link>}
+          {row.active && can("COSTUME_DELETE") && (
+            <button className="text-button text-danger" type="button" onClick={() => handleDeactivate(row)}>Deactivate</button>
+          )}
+        </div>
+      ),
+    },
+  ];
+
   return (
     <ProtectedRoute permission="COSTUME_VIEW">
       <PageHeader
         eyebrow="CATALOG"
         title="Costumes"
-        description="Browse active costume records and their published catalog details."
+        description="Manage costume records and their published catalog details."
+        action={can("COSTUME_CREATE") && <Link className="button button-primary" href="/admin/costumes/new">Create costume</Link>}
       />
       <section className="content-card">
         <div className="table-toolbar">
@@ -98,7 +139,15 @@ export default function CostumesPage() {
             <input id="costume-search" className="form-control search-control" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search costume names" maxLength={100} />
             <button className="button button-primary" type="submit">Search</button>
           </form>
-          <span className="table-count">{pageData.totalElements} active costumes</span>
+          <label className="filter-control">
+            <span>Status</span>
+            <select className="form-control" value={activeFilter} onChange={(event) => { setPage(0); setActiveFilter(event.target.value); }}>
+              <option value="true">Active</option>
+              <option value="false">Inactive</option>
+              <option value="">All</option>
+            </select>
+          </label>
+          <span className="table-count">{pageData.totalElements} costumes</span>
         </div>
         {canViewCategories && (
           <>
@@ -120,13 +169,14 @@ export default function CostumesPage() {
             {categoryError && <p className="inline-error filter-error" role="alert">{categoryError}</p>}
           </>
         )}
+        {actionError && <p className="inline-error" role="alert">{actionError}</p>}
         <DataTable
           columns={columns}
           rows={pageData.content}
           loading={loading}
           error={error}
-          emptyTitle="No active costumes found"
-          emptyDescription="Try a different search. Costume create, edit, and status changes need backend write APIs."
+          emptyTitle="No costumes found"
+          emptyDescription="Try a different search or status filter."
         />
         <Pagination
           page={pageData.page}
@@ -135,7 +185,7 @@ export default function CostumesPage() {
           onChange={setPage}
         />
       </section>
-      <p className="capability-note">Read-only: costume create, edit, activate/deactivate, and image upload APIs are not implemented. Category filtering uses active categories and requires CATEGORY_VIEW. Prices are displayed without a currency because the API does not provide one.</p>
+      <p className="capability-note">Catalog images are managed by URL; file upload and currency selection are not configured. Category filtering uses active categories and requires CATEGORY_VIEW. Prices are displayed without a currency because the API does not provide one.</p>
     </ProtectedRoute>
   );
 }

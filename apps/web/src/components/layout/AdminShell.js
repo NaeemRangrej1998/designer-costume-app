@@ -11,6 +11,9 @@ const navigation = [
   { label: "Categories", href: "/admin/categories", permission: "CATEGORY_VIEW" },
   { label: "Costumes", href: "/admin/costumes", permission: "COSTUME_VIEW" },
   { label: "Users", href: "/admin/users", permission: ["USER_VIEW", "USER_CREATE"] },
+  { label: "Colors & sizes", href: "/admin/catalog-options", permission: "COSTUME_VIEW" },
+  { label: "Inquiries", href: "/admin/inquiries", permission: "INQUIRY_VIEW" },
+  { label: "Roles & permissions", href: "/admin/roles", role: "SUPER_ADMIN" },
 ];
 
 export default function AdminShell({ children }) {
@@ -19,7 +22,9 @@ export default function AdminShell({ children }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [logoutError, setLogoutError] = useState("");
 
-  const visibleNavigation = navigation.filter(({ permission }) => {
+  const visibleNavigation = navigation.filter((item) => {
+    const { permission } = item;
+    if (item?.role && !user?.roles?.includes(item.role)) return false;
     if (!permission) return true;
     return Array.isArray(permission)
       ? permission.some((item) => can(item))

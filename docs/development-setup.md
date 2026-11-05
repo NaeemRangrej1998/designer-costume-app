@@ -49,6 +49,8 @@ npm install
 npm run dev
 ```
 
+Development and production builds use separate Next.js output directories, so building production assets does not overwrite a running development server.
+
 Run the mobile client from `apps/mobile`:
 
 ```bash

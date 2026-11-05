@@ -49,7 +49,7 @@ The catalog is readable without a session; protected profile and admin APIs rema
 ## Feature limitations and missing backend APIs
 
 - **Favorites:** no favorite list/add/remove endpoints; no localStorage substitute is used.
-- **Inquiries:** no inquiry create/list/status endpoints; contact form submission is disabled. Optional direct email/phone links work when configured.
+- **Inquiries:** admin listing and status updates are available, but there is no customer inquiry-submission endpoint; contact form submission is disabled. Optional direct email/phone links work when configured.
 - **Try-on:** selected JPEG/PNG/WebP photo (up to 10 MB) is previewed with a temporary object URL only. It is not uploaded or persisted. AI inference and generated results do not exist.
 - **Gallery:** only the existing primary image is available.
 - **Inventory and product actions:** no add-to-cart, checkout, stock quantity, or costume write APIs.

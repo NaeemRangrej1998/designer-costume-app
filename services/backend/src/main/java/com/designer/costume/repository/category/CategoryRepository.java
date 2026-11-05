@@ -2,6 +2,7 @@ package com.designer.costume.repository.category;
 
 import com.designer.costume.entity.category.CategoryEntity;
 import com.designer.costume.dto.response.CategoryResponse;
+import org.springframework.data.domain.Sort;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -15,6 +16,22 @@ public interface CategoryRepository extends JpaRepository<CategoryEntity, UUID> 
     long countByActiveTrue();
 
     Optional<CategoryEntity> findByNameIgnoreCase(String name);
+
+    @Query(
+            value = """
+                    SELECT c FROM CategoryEntity c
+                    WHERE (:search = '' OR LOWER(c.name) LIKE LOWER(CONCAT('%', :search, '%')))
+                      AND (:active IS NULL OR c.active = :active)
+                    """,
+            countQuery = """
+                    SELECT COUNT(c) FROM CategoryEntity c
+                    WHERE (:search = '' OR LOWER(c.name) LIKE LOWER(CONCAT('%', :search, '%')))
+                      AND (:active IS NULL OR c.active = :active)
+                    """)
+    Page<CategoryEntity> findAdminCategories(
+            @Param("search") String search,
+            @Param("active") Boolean active,
+            Pageable pageable);
 
     @Query(
             value = """

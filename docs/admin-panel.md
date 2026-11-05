@@ -1,20 +1,21 @@
 # Admin web panel
 
-Phase 5 adds a permission-aware Next.js admin workspace. The frontend integrates only with endpoints that exist in the Spring Boot API. It does not create simulated records or claim a write operation succeeded when there is no corresponding backend API.
+Phase 5 provides a permission-aware Next.js admin workspace backed by permission-checked Spring Boot APIs. The frontend does not create simulated records or claim a write operation succeeded when an API fails.
 
 ## Routes
 
 | Route | Access | Behavior |
 | --- | --- | --- |
 | `/login` | Public | Authenticates with `POST /api/v1/auth/login`; rejects non-administrative accounts for the admin area |
-| `/admin` | `ADMIN` or `SUPER_ADMIN` | Live, permission-filtered catalog/customer/inquiry counts and costume distribution |
-| `/admin/categories` | Administrative role + `CATEGORY_VIEW` | Search and paginate active categories; displays parent and image links |
-| `/admin/costumes` | Administrative role + `COSTUME_VIEW` | Search and paginate active costumes; optional category filter when `CATEGORY_VIEW` is granted |
-| `/admin/costumes/[id]` | Administrative role + `COSTUME_VIEW` | Costume detail and available variants |
-| `/admin/users` | Administrative role + `USER_VIEW` or `USER_CREATE` | Explains that the backend has no user directory endpoint; links to creation when permitted |
-| `/admin/users/create` | Administrative role + `USER_CREATE` | Creates a user through the existing API; the backend remains authoritative for role assignment |
-
-Other requested sections (colors, sizes, full variants, customers, roles, permissions, inquiries, and settings) are not presented as functional navigation items because the backend has no corresponding permitted APIs.
+| `/admin` | `ADMIN` or `SUPER_ADMIN` | Live, permission-filtered counts, costume distribution, and recent activity for users with `USER_VIEW` |
+| `/admin/categories` | `CATEGORY_VIEW` | Search, filter by active state, edit, create, and deactivate categories |
+| `/admin/costumes` | `COSTUME_VIEW` | Search, filter by category/status, edit, create, and deactivate costumes |
+| `/admin/costumes/[id]` | `COSTUME_VIEW` | Costume details and all variants; create/update stock, price, image URL, and availability |
+| `/admin/catalog-options` | `COSTUME_VIEW` | Create/update colors and sizes; activate/deactivate them |
+| `/admin/users` | `USER_VIEW` or `USER_CREATE` | Search/paginate users, update users and roles, deactivate users, and create users as allowed |
+| `/admin/inquiries` | `INQUIRY_VIEW` | Search/paginate inquiries and update status with `INQUIRY_UPDATE` |
+| `/admin/roles` | `SUPER_ADMIN` role | Create roles and assign/remove the predefined permission set |
+| `/admin/users/create` | `USER_CREATE` | Creates a user; server validates role assignments against the administrator's effective permissions |
 
 ## Frontend structure
 
@@ -32,34 +33,32 @@ The readable `csrf_token` cookie is sent as `X-CSRF-TOKEN` for refresh and logou
 
 The Axios response interceptor shares one refresh request for simultaneous expired-access requests, retries each original request at most once, and clears in-memory authentication if refresh returns 401. The UI hides links and protects pages based on the user's `roles` and `permissions` from `/auth/me`; this is only a usability layer. Spring Security and service checks remain the actual authorization boundary.
 
-## Verified backend API coverage
+## Backend API coverage
 
 | Feature | Existing API integrated |
 | --- | --- |
 | Login / session restoration / current user / logout | `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `GET /api/v1/auth/me`, `POST /api/v1/auth/logout` |
-| Category reads | `GET /api/v1/categories?page=&size=&search=`, `GET /api/v1/categories/{id}` |
-| Costume reads | `GET /api/v1/costumes?page=&size=&search=&categoryId=`, `GET /api/v1/costumes/{id}` |
-| Available costume variants | `GET /api/v1/costumes/{costumeId}/variants` |
-| Administrative user create | `POST /api/v1/admin/users` |
-| Dashboard summary | `GET /api/v1/admin/dashboard` |
+| Public catalog reads | `GET /api/v1/categories`, `GET /api/v1/costumes`, and detail/available-variant GET routes |
+| Category administration | `GET/POST /api/v1/admin/categories`, `GET/PUT/DELETE /api/v1/admin/categories/{id}` |
+| Costume administration | `GET/POST /api/v1/admin/costumes`, `GET/PUT/DELETE /api/v1/admin/costumes/{id}` |
+| Colors / sizes | `GET/POST /api/v1/admin/colors`, `PUT /api/v1/admin/colors/{id}`; corresponding `/sizes` routes |
+| Inventory | `GET/POST /api/v1/admin/costumes/{costumeId}/variants`, `PUT /api/v1/admin/costumes/{costumeId}/variants/{variantId}` |
+| Users | `GET/POST /api/v1/admin/users`, `GET/PUT/DELETE /api/v1/admin/users/{id}` |
+| Inquiries | `GET /api/v1/admin/inquiries`, `GET /api/v1/admin/inquiries/{id}`, `PATCH /api/v1/admin/inquiries/{id}/status` |
+| Roles / permission catalog | `GET/POST /api/v1/admin/roles`, `PUT /api/v1/admin/roles/{id}`, `GET /api/v1/admin/permissions` (SUPER_ADMIN only) |
+| Dashboard summary and activity | `GET /api/v1/admin/dashboard`, `GET /api/v1/admin/activity?limit=10` |
 
-List APIs return only active categories/costumes. Category and costume list pages therefore show the active status but cannot manage inactive records.
+Administrative list APIs can filter active and inactive records. `DELETE` on a category, costume, or user is a soft deactivation; records are retained. Color and size availability is managed by updating their `active` flag. Category/costume images use URLs; binary file upload/storage is not configured.
 
-## Backend API gaps (buttons and mutations intentionally omitted)
+## Remaining limitations
 
-- Inquiry management, inquiry status updates, and recent activity feed. The dashboard shows live inquiry totals only to users with `INQUIRY_VIEW`.
-- Category create, update, activate/deactivate, and image mutation.
-- Costume create, update, activate/deactivate, category-filter metadata for users who cannot read categories, and image upload.
-- Color and size list/create/update/availability APIs.
-- Variant list/filter/create/update/stock/availability APIs. The existing per-costume endpoint only returns available variants.
-- Customer list and detail APIs.
-- User list/detail/update/activate/deactivate APIs. Only create is present.
-- Role list/detail/create/update and role-permission assignment APIs.
-- Permission list/detail/group APIs.
-- Inquiry list/detail/search/status-update APIs.
-- Settings APIs.
-
-Adding these features requires separately authorized backend endpoints, request/response DTOs, validation, and tests. The admin panel does not call invented routes.
+- The permission catalog is read-only and seeded by database migrations; arbitrary permission definitions cannot be created through the UI.
+- Role and permission management is restricted to `SUPER_ADMIN`. Existing user grants are snapshots: removing a role permission revokes it from assigned users; adding a permission does not silently grant it to existing users. Newly added permissions are snapshotted only when a role is newly assigned.
+- Admins can update inquiry status, but customer inquiry submission remains unavailable in the storefront.
+- The activity feed records successful administrative create/update/deactivate actions and inquiry status changes. It stores action/resource identifiers and the actor reference, not request bodies, passwords, or tokens.
+- No configurable application-settings API is defined.
+- Catalog image management accepts HTTP(S) URLs only; there is no binary upload or cloud image storage.
+- The web UI does not configure currency; prices are shown as currency-unspecified values.
 
 ## Dashboard summary API
 
@@ -71,7 +70,7 @@ Adding these features requires separately authorized backend endpoints, request/
 - `USER_VIEW`: active customer count.
 - `INQUIRY_VIEW`: total and new inquiry counts.
 
-Recent activity and inquiry listing/status management are not available because their APIs are not implemented. Empty counts reflect the database; no dashboard values are fabricated.
+`GET /api/v1/admin/activity?limit=10` returns the latest successful administrative changes and requires `USER_VIEW`. The limit must be between 1 and 50. Empty counts and activity reflect the database; no values are fabricated.
 
 ## Configuration and running
 
@@ -97,4 +96,4 @@ There is no default admin email or password in the repository. Use credentials p
 
 ## Testing
 
-The web package does not currently have a configured component/unit-test runner. Phase 5 adds no test dependency. Run the existing ESLint/build checks with `npm run lint` and `npm run build` in `apps/web`. Backend cookie/session behavior is covered by the existing isolated PostgreSQL integration test suite.
+The web package does not currently have a configured component/unit-test runner. Run the existing ESLint/build checks with `npm run lint` and `npm run build` in `apps/web`. The isolated PostgreSQL integration suite covers admin catalog writes and role-permission snapshot revocation.

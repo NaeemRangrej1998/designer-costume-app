@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import DataTable from "@/components/common/DataTable";
 import PageHeader from "@/components/common/PageHeader";
 import Pagination from "@/components/common/Pagination";
 import ProtectedRoute from "@/components/common/ProtectedRoute";
-import { getCategories } from "@/services/api/categoryApi";
+import { deactivateCategory, getAdminCategories } from "@/services/api/categoryApi";
 import { getApiErrorMessage } from "@/services/api/apiClient";
+import { useAuth } from "@/context/AuthContext";
 
-const columns = [
+const baseColumns = [
   {
     key: "imageUrl",
     label: "Image",
@@ -19,22 +21,31 @@ const columns = [
   { key: "name", label: "Category" },
   { key: "description", label: "Description" },
   { key: "parentCategoryName", label: "Parent category" },
-  { key: "status", label: "Status", render: () => <span className="status-pill status-active">Active</span> },
+  { key: "active", label: "Status", render: (category) => <span className={`status-pill ${category.active ? "status-active" : "status-inactive"}`}>{category.active ? "Active" : "Inactive"}</span> },
 ];
 
 export default function CategoriesPage() {
+  const { can } = useAuth();
   const [pageData, setPageData] = useState({ content: [], page: 0, size: 10, totalElements: 0, totalPages: 0 });
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
+  const [activeFilter, setActiveFilter] = useState("true");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [actionError, setActionError] = useState("");
 
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
     setError("");
-    getCategories({ page, size: 10, search: query, signal: controller.signal })
+    getAdminCategories({
+      page,
+      size: 10,
+      search: query,
+      active: activeFilter === "" ? undefined : activeFilter === "true",
+      signal: controller.signal,
+    })
       .then(setPageData)
       .catch((requestError) => {
         if (!controller.signal.aborted) setError(getApiErrorMessage(requestError, "Could not load categories."));
@@ -43,7 +54,7 @@ export default function CategoriesPage() {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [page, query]);
+  }, [page, query, activeFilter]);
 
   function submitSearch(event) {
     event.preventDefault();
@@ -51,12 +62,44 @@ export default function CategoriesPage() {
     setQuery(search.trim());
   }
 
+  async function handleDeactivate(category) {
+    if (!window.confirm(`Deactivate ${category.name}?`)) return;
+    setActionError("");
+    try {
+      await deactivateCategory(category.id);
+      setPageData((current) => ({
+        ...current,
+        content: current.content.filter((item) => item.id !== category.id),
+        totalElements: Math.max(0, current.totalElements - 1),
+      }));
+    } catch (requestError) {
+      setActionError(getApiErrorMessage(requestError, "Category could not be deactivated."));
+    }
+  }
+
+  const columns = [
+    ...baseColumns,
+    {
+      key: "actions",
+      label: "Actions",
+      render: (category) => (
+        <div className="table-actions">
+          {can("CATEGORY_UPDATE") && <Link className="text-link" href={`/admin/categories/${category.id}/edit`}>Edit</Link>}
+          {category.active && can("CATEGORY_DELETE") && (
+            <button className="text-button text-danger" type="button" onClick={() => handleDeactivate(category)}>Deactivate</button>
+          )}
+        </div>
+      ),
+    },
+  ];
+
   return (
     <ProtectedRoute permission="CATEGORY_VIEW">
       <PageHeader
         eyebrow="CATALOG"
         title="Categories"
-        description="Browse active categories available in the catalog."
+        description="Manage categories available in the catalog."
+        action={can("CATEGORY_CREATE") && <Link className="button button-primary" href="/admin/categories/new">Create category</Link>}
       />
       <section className="content-card">
         <div className="table-toolbar">
@@ -65,15 +108,24 @@ export default function CategoriesPage() {
             <input id="category-search" className="form-control search-control" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search category names" maxLength={100} />
             <button className="button button-primary" type="submit">Search</button>
           </form>
-          <span className="table-count">{pageData.totalElements} active categories</span>
+          <label className="filter-control">
+            <span>Status</span>
+            <select className="form-control" value={activeFilter} onChange={(event) => { setPage(0); setActiveFilter(event.target.value); }}>
+              <option value="true">Active</option>
+              <option value="false">Inactive</option>
+              <option value="">All</option>
+            </select>
+          </label>
+          <span className="table-count">{pageData.totalElements} categories</span>
         </div>
+        {actionError && <p className="inline-error" role="alert">{actionError}</p>}
         <DataTable
           columns={columns}
           rows={pageData.content}
           loading={loading}
           error={error}
-          emptyTitle="No active categories found"
-          emptyDescription="Try a different search. Creating and editing categories is not available because the backend has no write endpoints."
+          emptyTitle="No categories found"
+          emptyDescription="Try a different search or status filter."
         />
         <Pagination
           page={pageData.page}
@@ -82,7 +134,6 @@ export default function CategoriesPage() {
           onChange={setPage}
         />
       </section>
-      <p className="capability-note">Read-only: category create, edit, activate/deactivate, image, and parent assignment APIs are not implemented.</p>
     </ProtectedRoute>
   );
 }

@@ -28,18 +28,21 @@ public class UserProvisioningService {
     private final PasswordEncoder passwordEncoder;
     private final UserResponseMapper userResponseMapper;
     private final UserRolePermissionGrantRepository permissionGrantRepository;
+    private final AdminActivityService activityService;
 
     public UserProvisioningService(
             UserRepository userRepository,
             RoleRepository roleRepository,
             PasswordEncoder passwordEncoder,
             UserResponseMapper userResponseMapper,
-            UserRolePermissionGrantRepository permissionGrantRepository) {
+            UserRolePermissionGrantRepository permissionGrantRepository,
+            AdminActivityService activityService) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
         this.userResponseMapper = userResponseMapper;
         this.permissionGrantRepository = permissionGrantRepository;
+        this.activityService = activityService;
     }
 
     @Transactional
@@ -85,6 +88,7 @@ public class UserProvisioningService {
                 request.fullName(), email, request.phoneNumber(), request.password(), roles);
         UserEntity savedUser = userRepository.saveAndFlush(user);
         permissionGrantRepository.snapshotCurrentRolePermissions(savedUser.getId());
+        activityService.record("CREATED", "USER", savedUser.getId());
         return userResponseMapper.toResponse(savedUser);
     }
 

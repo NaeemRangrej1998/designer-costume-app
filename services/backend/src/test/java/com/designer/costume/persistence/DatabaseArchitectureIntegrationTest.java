@@ -30,6 +30,8 @@ import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Set;
+import java.util.Arrays;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -45,6 +47,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import com.designer.costume.security.JwtService;
 import com.designer.costume.security.JwtTokenType;
 import com.designer.costume.security.TokenHashing;
@@ -59,6 +63,8 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.transaction.annotation.Transactional;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -148,7 +154,7 @@ class DatabaseArchitectureIntegrationTest {
                 "categories", "costumes", "costume_images", "colors", "sizes",
                 "costume_variants", "user_photos", "try_on_jobs", "try_on_results",
                 "favorites", "inquiries", "refresh_tokens", "password_reset_tokens",
-                "user_role_permission_grants");
+                "user_role_permission_grants", "admin_activity_events");
         assertThat(count("SELECT COUNT(*) FROM roles")).isEqualTo(3);
         assertThat(count("SELECT COUNT(*) FROM permissions")).isEqualTo(15);
         assertThat(count("""
@@ -463,6 +469,204 @@ class DatabaseArchitectureIntegrationTest {
 
         mockMvc.perform(get("/api/v1/admin/dashboard"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @Transactional
+    void adminCatalogCanManageCategoriesCostumesAndInventory() throws Exception {
+        var admin = withAuthorities(
+                "ROLE_ADMIN", "USER_VIEW", "CATEGORY_VIEW", "CATEGORY_CREATE", "CATEGORY_UPDATE", "CATEGORY_DELETE",
+                "COSTUME_VIEW", "COSTUME_CREATE", "COSTUME_UPDATE", "COSTUME_DELETE");
+        MvcResult categoryResult = mockMvc.perform(post("/api/v1/admin/categories")
+                        .with(admin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(java.util.Map.of(
+                                "name", "Managed Category " + UUID.randomUUID(),
+                                "description", "Managed category",
+                                "active", true))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.active").value(true))
+                .andReturn();
+        UUID categoryId = UUID.fromString(objectMapper.readTree(
+                categoryResult.getResponse().getContentAsString()).path("data").path("id").asText());
+        mockMvc.perform(get("/api/v1/admin/activity").with(admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].action").value("CREATED"))
+                .andExpect(jsonPath("$.data[0].resourceType").value("CATEGORY"))
+                .andExpect(jsonPath("$.data[0].resourceId").value(categoryId.toString()));
+
+        MvcResult colorResult = mockMvc.perform(post("/api/v1/admin/colors")
+                        .with(admin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(java.util.Map.of(
+                                "name", "Managed Color " + UUID.randomUUID(),
+                                "hexCode", "#12AB34",
+                                "active", true))))
+                .andExpect(status().isOk())
+                .andReturn();
+        UUID colorId = UUID.fromString(objectMapper.readTree(
+                colorResult.getResponse().getContentAsString()).path("data").path("id").asText());
+
+        MvcResult sizeResult = mockMvc.perform(post("/api/v1/admin/sizes")
+                        .with(admin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(java.util.Map.of(
+                                "name", "Size-" + UUID.randomUUID().toString().substring(0, 8),
+                                "displayOrder", 5,
+                                "active", true))))
+                .andExpect(status().isOk())
+                .andReturn();
+        UUID sizeId = UUID.fromString(objectMapper.readTree(
+                sizeResult.getResponse().getContentAsString()).path("data").path("id").asText());
+
+        MvcResult costumeResult = mockMvc.perform(post("/api/v1/admin/costumes")
+                        .with(admin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(java.util.Map.of(
+                                "name", "Managed Costume",
+                                "sku", "MANAGED-" + UUID.randomUUID(),
+                                "categoryId", categoryId,
+                                "basePrice", new BigDecimal("100.00"),
+                                "primaryImageUrl", "https://images.example.test/managed.jpg",
+                                "active", true))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.primaryImageUrl")
+                        .value("https://images.example.test/managed.jpg"))
+                .andReturn();
+        UUID costumeId = UUID.fromString(objectMapper.readTree(
+                costumeResult.getResponse().getContentAsString()).path("data").path("id").asText());
+
+        mockMvc.perform(post("/api/v1/admin/costumes/{costumeId}/variants", costumeId)
+                        .with(admin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(java.util.Map.of(
+                                "colorId", colorId,
+                                "sizeId", sizeId,
+                                "sku", "MANAGED-VARIANT-" + UUID.randomUUID(),
+                                "price", new BigDecimal("105.00"),
+                                "stockQuantity", 4,
+                                "available", true))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.stockQuantity").value(4))
+                .andExpect(jsonPath("$.data.available").value(true));
+
+        mockMvc.perform(get("/api/v1/admin/costumes/{costumeId}/variants", costumeId).with(admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .delete("/api/v1/admin/costumes/{id}", costumeId).with(admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .delete("/api/v1/admin/categories/{id}", categoryId).with(admin))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void customerCatalogPermissionsDoNotGrantAccessToAdminCatalogRoutes() throws Exception {
+        JsonNode registered = register(
+                "admin-boundary-" + UUID.randomUUID() + "@example.test", "mobile");
+        String customerToken = registered.path("data").path("accessToken").asText();
+
+        mockMvc.perform(get("/api/v1/admin/categories")
+                        .header("Authorization", "Bearer " + customerToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @Transactional
+    @WithMockUser(roles = "SUPER_ADMIN")
+    void rolePermissionRemovalRevokesSnapshotsAndReaddingDoesNotRestoreThem() throws Exception {
+        UUID userId = UUID.randomUUID();
+        insertUserWithRole(userId, "Snapshot User", "snapshot-user@example.test",
+                "SnapshotUser1!", "ADMIN");
+        assertThat(permissionGrantRepository.findEffectivePermissions(userId))
+                .contains("CATEGORY_VIEW");
+        UUID adminRoleId = jdbcTemplate.queryForObject(
+                "SELECT id FROM roles WHERE name = 'ADMIN'", UUID.class);
+
+        Set<String> remainingPermissions = Set.copyOf(jdbcTemplate.queryForList("""
+                SELECT permission.name
+                FROM role_permissions role_permission
+                JOIN roles role ON role.id = role_permission.role_id
+                JOIN permissions permission ON permission.id = role_permission.permission_id
+                WHERE role.name = 'ADMIN' AND permission.name <> 'CATEGORY_VIEW'
+                """, String.class));
+        updateRolePermissions(adminRoleId, remainingPermissions);
+        assertThat(permissionGrantRepository.findEffectivePermissions(userId))
+                .doesNotContain("CATEGORY_VIEW");
+
+        Set<String> restoredRolePermissions = new java.util.HashSet<>(remainingPermissions);
+        restoredRolePermissions.add("CATEGORY_VIEW");
+        updateRolePermissions(adminRoleId, restoredRolePermissions);
+        assertThat(permissionGrantRepository.findEffectivePermissions(userId))
+                .doesNotContain("CATEGORY_VIEW");
+    }
+
+    @Test
+    @Transactional
+    void adminCanSearchAndUpdateUsersThroughProtectedEndpoints() throws Exception {
+        UUID adminId = UUID.randomUUID();
+        String adminEmail = "user-management-admin-" + adminId + "@example.test";
+        insertUserWithRole(adminId, "User Management Admin", adminEmail, "AdminPass1!", "ADMIN");
+        UUID customerId = UUID.randomUUID();
+        String customerEmail = "managed-customer-" + customerId + "@example.test";
+        insertUserWithRole(customerId, "Before Update", customerEmail, "CustomerPass1!", "CUSTOMER");
+        String accessToken = login(adminEmail, "AdminPass1!");
+
+        mockMvc.perform(get("/api/v1/admin/users")
+                        .header("Authorization", "Bearer " + accessToken)
+                        .param("search", customerEmail))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(1))
+                .andExpect(jsonPath("$.data.content[0].email").value(customerEmail));
+
+        mockMvc.perform(put("/api/v1/admin/users/{id}", customerId)
+                        .header("Authorization", "Bearer " + accessToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(java.util.Map.of(
+                                "fullName", "After Update",
+                                "email", customerEmail,
+                                "phoneNumber", "555-0101",
+                                "roles", List.of("CUSTOMER"),
+                                "active", true))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.fullName").value("After Update"))
+                .andExpect(jsonPath("$.data.phoneNumber").value("555-0101"));
+
+        mockMvc.perform(get("/api/v1/admin/users/{id}", customerId)
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.fullName").value("After Update"));
+    }
+
+    @Test
+    @Transactional
+    void adminCanSearchInquiriesAndUpdateTheirStatus() throws Exception {
+        var admin = withAuthorities("ROLE_ADMIN", "INQUIRY_VIEW", "INQUIRY_UPDATE");
+        UUID inquiryId = UUID.randomUUID();
+        String email = "inquiry-" + inquiryId + "@example.test";
+        jdbcTemplate.update("""
+                INSERT INTO inquiries (id, customer_name, email, message)
+                VALUES (?, 'Inquiry Customer', ?, 'Please share more details.')
+                """, inquiryId, email);
+
+        mockMvc.perform(get("/api/v1/admin/inquiries")
+                        .with(admin)
+                        .param("search", email)
+                        .param("status", "NEW"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(1))
+                .andExpect(jsonPath("$.data.content[0].status").value("NEW"));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .patch("/api/v1/admin/inquiries/{id}/status", inquiryId).with(admin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(
+                                java.util.Map.of("status", "CONTACTED"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("CONTACTED"));
     }
 
     @Test
@@ -1019,6 +1223,24 @@ class DatabaseArchitectureIntegrationTest {
                 SELECT ?, role.id FROM roles role WHERE role.name = ?
                 """, userId, roleName);
         permissionGrantRepository.snapshotCurrentRolePermissions(userId);
+    }
+
+    private void updateRolePermissions(UUID roleId, Set<String> permissions) throws Exception {
+        mockMvc.perform(put("/api/v1/admin/roles/{id}", roleId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(java.util.Map.of(
+                                "name", "ADMIN",
+                                "description", "Administrator role",
+                                "permissions", permissions))))
+                .andExpect(status().isOk());
+    }
+
+    private org.springframework.test.web.servlet.request.RequestPostProcessor withAuthorities(
+            String... authorityNames) {
+        GrantedAuthority[] authorities = Arrays.stream(authorityNames)
+                .map(SimpleGrantedAuthority::new)
+                .toArray(GrantedAuthority[]::new);
+        return user("test-admin").authorities(authorities);
     }
 
     private String responseCookieValue(MvcResult result, String name) {

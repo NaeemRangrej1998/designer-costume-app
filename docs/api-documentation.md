@@ -11,7 +11,7 @@ The REST API uses the existing `com.designer.costume` Spring package:
 - **Global exception advice** turns expected application/database errors into consistent HTTP responses.
 - **Spring Security** validates bearer access tokens and applies database-backed permission checks.
 
-Catalog list and detail queries use JPQL constructor projections, so category and primary-image information is fetched in the same query without serializing lazy entity relationships. Available variants are also projected directly to a DTO. The Phase 2 schema and migrations are unchanged.
+Catalog read queries use JPQL constructor projections, so category and primary-image information is fetched without serializing lazy entity relationships. Admin write APIs use request/response DTOs. Migration V13 adds the minimal metadata table used by the administrative activity feed.
 
 ## Common response envelope
 
@@ -51,7 +51,9 @@ Returns `200 OK` with `data.status = "UP"`.
 
 ### Admin dashboard
 
-`GET /api/v1/admin/dashboard` requires an `ADMIN` or `SUPER_ADMIN` access token. The response contains active category and costume counts, available variants, active customers, inquiry totals, and active costume counts by category. Each field is populated only when the authenticated administrator has its corresponding view permission; fields without permission are `null`. Recent activity and inquiry management are not included.
+`GET /api/v1/admin/dashboard` requires an `ADMIN` or `SUPER_ADMIN` access token. The response contains active category and costume counts, available variants, active customers, inquiry totals, and active costume counts by category. Each field is populated only when the authenticated administrator has its corresponding view permission; fields without permission are `null`.
+
+`GET /api/v1/admin/activity?limit=10` requires `USER_VIEW` and returns up to 50 of the latest successful administrative changes. Events record an action, resource type and ID, actor reference, and timestamp. Request bodies, passwords, and tokens are not recorded. Customer registration and read-only requests do not create activity events.
 
 Example:
 
@@ -76,7 +78,56 @@ Example:
 
 ### Authentication
 
-Registration, login, refresh, logout, current-user, and password-recovery endpoints are documented in [authentication-and-security.md](./authentication-and-security.md). The health endpoint and active catalog read endpoints are public. Category and costume reads expose only active catalog data; administrative catalog writes are not part of the current API.
+Registration, login, refresh, logout, current-user, and password-recovery endpoints are documented in [authentication-and-security.md](./authentication-and-security.md). The health endpoint and active catalog read endpoints are public. Administrative writes are under `/api/v1/admin` and require both an administrator role and the relevant permission.
+
+### Admin catalog
+
+| Method and path | Permission | Behavior |
+| --- | --- | --- |
+| `GET /api/v1/admin/categories?page=&size=&search=&active=` | `CATEGORY_VIEW` | Paginated categories; `active` may be true, false, or omitted |
+| `GET /api/v1/admin/categories/{id}` | `CATEGORY_VIEW` | Category details, including inactive records |
+| `POST /api/v1/admin/categories` | `CATEGORY_CREATE` | Create category; optional parent and HTTP(S) image URL |
+| `PUT /api/v1/admin/categories/{id}` | `CATEGORY_UPDATE` | Replace category fields and active state |
+| `DELETE /api/v1/admin/categories/{id}` | `CATEGORY_DELETE` | Soft-deactivate; rejected while active costumes use the category |
+| `GET /api/v1/admin/costumes?page=&size=&search=&categoryId=&active=` | `COSTUME_VIEW` | Paginated costumes, including inactive records |
+| `GET /api/v1/admin/costumes/{id}` | `COSTUME_VIEW` | Costume details and primary image URL |
+| `POST /api/v1/admin/costumes` | `COSTUME_CREATE` | Create costume and optional primary image URL |
+| `PUT /api/v1/admin/costumes/{id}` | `COSTUME_UPDATE` | Update costume fields and active state |
+| `DELETE /api/v1/admin/costumes/{id}` | `COSTUME_DELETE` | Soft-deactivate |
+
+Category names and costume SKUs must be unique. An active costume must reference an active category. Category parent cycles are rejected. Image URLs are not fetched or stored as files.
+
+### Admin variant inventory
+
+| Method and path | Permission | Behavior |
+| --- | --- | --- |
+| `GET /api/v1/admin/colors`, `GET /api/v1/admin/sizes` | `COSTUME_VIEW` | List all options, including inactive records |
+| `POST /api/v1/admin/colors`, `POST /api/v1/admin/sizes` | `COSTUME_CREATE` | Create color or size |
+| `PUT /api/v1/admin/colors/{id}`, `PUT /api/v1/admin/sizes/{id}` | `COSTUME_UPDATE` | Update attributes or active state |
+| `GET /api/v1/admin/costumes/{costumeId}/variants` | `COSTUME_VIEW` | List all variants, including unavailable variants |
+| `POST /api/v1/admin/costumes/{costumeId}/variants` | `COSTUME_CREATE` | Create variant with SKU, color, size, price, stock, and availability |
+| `PUT /api/v1/admin/costumes/{costumeId}/variants/{variantId}` | `COSTUME_UPDATE` | Update variant inventory and availability |
+
+Variant SKUs and color-size combinations are unique. Available variants require active color and size records. Public catalog variant reads continue to return only available variants.
+
+### Admin users and inquiries
+
+| Method and path | Permission | Behavior |
+| --- | --- | --- |
+| `GET /api/v1/admin/users?page=&size=&search=&active=` | `USER_VIEW` | Search and paginate users |
+| `GET /api/v1/admin/users/{id}` | `USER_VIEW` | Safe user details; password hashes are never returned |
+| `POST /api/v1/admin/users` | `USER_CREATE` | Create user; roles are limited to permissions the actor effectively holds |
+| `PUT /api/v1/admin/users/{id}` | `USER_UPDATE` | Update profile, role assignments, and active state |
+| `DELETE /api/v1/admin/users/{id}` | `USER_DELETE` | Deactivate account and revoke refresh sessions |
+| `GET /api/v1/admin/inquiries?page=&size=&search=&status=` | `INQUIRY_VIEW` | Search and paginate inquiries |
+| `GET /api/v1/admin/inquiries/{id}` | `INQUIRY_VIEW` | Inquiry details |
+| `PATCH /api/v1/admin/inquiries/{id}/status` | `INQUIRY_UPDATE` | Change status to a defined `InquiryStatus` |
+
+The last active super administrator cannot be deactivated or demoted. Updating a user to inactive revokes all refresh sessions; protected requests also reject tokens for inactive users.
+
+### Admin roles and permissions
+
+`GET /api/v1/admin/roles`, `POST /api/v1/admin/roles`, `PUT /api/v1/admin/roles/{id}`, and `GET /api/v1/admin/permissions` are restricted to the `SUPER_ADMIN` role. Permission definitions are read-only and migration-seeded. Removing a permission from a role revokes the corresponding snapshotted user grants; adding a role permission does not automatically add it to existing users. A newly assigned role receives a permission snapshot at assignment time.
 
 ### Categories
 
@@ -181,7 +232,7 @@ Page size is capped at 100. Invalid page/size/search parameters return `400 Bad 
 | `409 Conflict` | Database integrity constraint conflict |
 | `500 Internal Server Error` | Unexpected server failure; details are logged, not returned |
 
-Validation errors return the first field/parameter validation message. No write APIs or request bodies are introduced in this phase.
+Validation errors return the first field/parameter validation message. Duplicate unique values return `409 Conflict`. Deactivation endpoints preserve records rather than hard-deleting them.
 
 ## API documentation UI
 

@@ -83,7 +83,7 @@ public class SecurityConfiguration {
                                 "/api/v1/costumes",
                                 "/api/v1/costumes/**")
                         .permitAll()
-                        .requestMatchers("/api/v1/admin/dashboard")
+                        .requestMatchers("/api/v1/admin/**")
                         .hasAnyRole("ADMIN", "SUPER_ADMIN")
                         .requestMatchers(HttpMethod.OPTIONS, "/**")
                         .permitAll()
