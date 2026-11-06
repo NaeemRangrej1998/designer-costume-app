@@ -8,4 +8,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface UserPhotoRepository extends JpaRepository<UserPhotoEntity, UUID> {
 
     List<UserPhotoEntity> findAllByUserIdAndDeletedAtIsNullOrderByCreatedAtDesc(UUID userId);
+
+    java.util.Optional<UserPhotoEntity> findByIdAndUserIdAndDeletedAtIsNull(UUID id, UUID userId);
 }

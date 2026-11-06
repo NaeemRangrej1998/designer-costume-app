@@ -50,7 +50,7 @@ export default function StoreHomePage() {
         <div className="store-hero-overlay" />
         <div className="store-hero-content">
           <span className="store-eyebrow store-eyebrow-light">DRESS FOR YOUR MOMENT</span>
-          <h1>Find your<br /><em>perfect look.</em></h1>
+          <h1>Find Your<br /><em>Perfect Celebration Look</em></h1>
           <p>Discover thoughtfully selected occasionwear for weddings, celebrations, and every beautiful moment between.</p>
           <div className="store-hero-actions">
             <Link className="store-button store-button-light" href="/costumes">Browse collection <span>↗</span></Link>

@@ -38,3 +38,7 @@ Thumbs.db
 *.swp
 coverage/
 .expo/
+storage/
+services/backend/storage/
+services/ai/weights/
+services/ai/.cache/

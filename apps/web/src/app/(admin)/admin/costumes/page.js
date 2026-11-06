@@ -7,7 +7,7 @@ import PageHeader from "@/components/common/PageHeader";
 import Pagination from "@/components/common/Pagination";
 import ProtectedRoute from "@/components/common/ProtectedRoute";
 import { getCategories } from "@/services/api/categoryApi";
-import { deactivateCostume, getAdminCostumes } from "@/services/api/costumeApi";
+import { deactivateCostume, getAdminCostumes, getImageAssetUrl } from "@/services/api/costumeApi";
 import { getApiErrorMessage } from "@/services/api/apiClient";
 import { useAuth } from "@/context/AuthContext";
 
@@ -29,7 +29,7 @@ const baseColumns = [
     key: "primaryImageUrl",
     label: "Primary image",
     render: (row) => row.primaryImageUrl
-      ? <a className="text-link" href={row.primaryImageUrl} target="_blank" rel="noreferrer">View image ↗</a>
+      ? <a className="text-link" href={getImageAssetUrl(row.primaryImageUrl)} target="_blank" rel="noreferrer">View image ↗</a>
       : <span className="muted">—</span>,
   },
   { key: "active", label: "Status", render: (row) => <span className={`status-pill ${row.active ? "status-active" : "status-inactive"}`}>{row.active ? "Active" : "Inactive"}</span> },

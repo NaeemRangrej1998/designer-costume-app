@@ -7,12 +7,24 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "ios": {
+      "bundleIdentifier": "com.designercostume.studio",
       "supportsTablet": true
     },
     "android": {
+      "package": "com.designercostume.studio",
       "adaptiveIcon": {
         "backgroundColor": "#F8F6F2"
       }
-    }
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Designer Costume Studio to select a photo for local try-on preparation.",
+          "microphonePermission": false
+        }
+      ]
+    ]
   }
 }

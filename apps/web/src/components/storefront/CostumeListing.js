@@ -60,6 +60,14 @@ export default function CostumeListing() {
     router.push(`/costumes${queryString ? `?${queryString}` : ""}`, { scroll: false });
   }, [router, searchParams]);
 
+  useEffect(() => {
+    if (search.trim() === query) return undefined;
+    const timeoutId = window.setTimeout(() => {
+      updateQuery({ search: search.trim(), page: 0 });
+    }, 350);
+    return () => window.clearTimeout(timeoutId);
+  }, [search, query, updateQuery]);
+
   function submitSearch(event) {
     event.preventDefault();
     updateQuery({ search: event.currentTarget.elements.search.value.trim(), page: 0 });

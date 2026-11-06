@@ -94,8 +94,26 @@ Registration, login, refresh, logout, current-user, and password-recovery endpoi
 | `POST /api/v1/admin/costumes` | `COSTUME_CREATE` | Create costume and optional primary image URL |
 | `PUT /api/v1/admin/costumes/{id}` | `COSTUME_UPDATE` | Update costume fields and active state |
 | `DELETE /api/v1/admin/costumes/{id}` | `COSTUME_DELETE` | Soft-deactivate |
+| `GET /api/v1/admin/costumes/{costumeId}/images` | `COSTUME_VIEW` | List gallery metadata |
+| `POST /api/v1/admin/costumes/{costumeId}/images` | `COSTUME_UPDATE` | Multipart image upload (`file`) |
+| `PUT /api/v1/admin/costumes/{costumeId}/images/{imageId}/primary` | `COSTUME_UPDATE` | Set the primary image |
+| `PUT /api/v1/admin/costumes/{costumeId}/images/order` | `COSTUME_UPDATE` | Reorder all gallery images |
+| `DELETE /api/v1/admin/costumes/{costumeId}/images/{imageId}` | `COSTUME_UPDATE` | Delete gallery image |
 
-Category names and costume SKUs must be unique. An active costume must reference an active category. Category parent cycles are rejected. Image URLs are not fetched or stored as files.
+Category names and costume SKUs must be unique. An active costume must reference an active category. Category parent cycles are rejected. Uploads accept JPEG, PNG, and WebP files up to 10 MiB. Uploaded image content is available at `GET /api/v1/costumes/{costumeId}/images/{imageId}/content` for active costumes.
+
+### Customer photo library
+
+The following endpoints require an authenticated `CUSTOMER` access token. Ownership is derived from the token; no user ID is accepted.
+
+| Method and path | Behavior |
+| --- | --- |
+| `GET /api/v1/customer/photos` | List the signed-in customer’s photo metadata |
+| `POST /api/v1/customer/photos` | Multipart upload with field `file` |
+| `GET /api/v1/customer/photos/{photoId}/content` | Read private photo content (`no-store`) |
+| `DELETE /api/v1/customer/photos/{photoId}` | Delete the customer’s photo and content |
+
+Photo deletion hides the metadata immediately and removes the stored file after the database transaction commits. See [image storage and privacy](./image-storage.md) for local filesystem configuration and the Compose upload volume.
 
 ### Admin variant inventory
 
@@ -226,6 +244,7 @@ Page size is capped at 100. Invalid page/size/search parameters return `400 Bad 
 | HTTP status | Meaning |
 | --- | --- |
 | `400 Bad Request` | Invalid pagination/filter parameter, invalid path/query type, or malformed request body |
+| `413 Payload Too Large` | Uploaded image exceeds the configured request/file size limit |
 | `404 Not Found` | Requested active category or costume does not exist |
 | `401 Unauthorized` | Missing, invalid, expired, or revoked credentials on protected endpoints |
 | `403 Forbidden` | Authenticated user lacks the required permission or CSRF validation fails |

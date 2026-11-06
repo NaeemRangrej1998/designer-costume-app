@@ -19,5 +19,44 @@ services:
       retries: 5
       start_period: 10s
 
+  backend:
+    build:
+      context: ../services/backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-costume_db}
+      DB_USERNAME: ${DB_USERNAME:-costume_user}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in the root .env file}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in the root .env file}
+      JWT_ACCESS_EXPIRATION: ${JWT_ACCESS_EXPIRATION:-900000}
+      JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION:-604800000}
+      JWT_ISSUER: ${JWT_ISSUER:-designer-costume-api}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
+      PASSWORD_RESET_DELIVERY: ${PASSWORD_RESET_DELIVERY:-development}
+      PASSWORD_RESET_EXPIRATION: ${PASSWORD_RESET_EXPIRATION:-900000}
+      PASSWORD_RESET_BASE_URL: ${PASSWORD_RESET_BASE_URL:-http://localhost:3000/reset-password}
+      SMTP_HOST: ${SMTP_HOST:-localhost}
+      SMTP_PORT: ${SMTP_PORT:-25}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_AUTH: ${SMTP_AUTH:-false}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-false}
+      SMTP_FROM: ${SMTP_FROM:-no-reply@designer-costume.local}
+      STORAGE_ROOT: /app/storage
+      MAX_FILE_SIZE: ${MAX_FILE_SIZE:-10485760}
+      MAX_REQUEST_SIZE: ${MAX_REQUEST_SIZE:-11534336}
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+    volumes:
+      - uploads_data:/app/storage
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   postgres_data:
+  uploads_data:

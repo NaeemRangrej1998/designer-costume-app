@@ -1,6 +1,6 @@
 # Designer Costume Studio
 
-A monorepo for a designer costume boutique's virtual try-on platform. It contains independently runnable web, mobile, backend, and AI-service projects, plus local PostgreSQL infrastructure. Phase 1 established the application foundations; Phase 2 added the normalized database model, JPA entities, repositories, Flyway migrations, and seed access-control data. Phase 3 added catalog read APIs. Phase 4 adds customer authentication, JWT access tokens, rotating persisted refresh sessions, password recovery, and permission-guarded administration APIs. Phase 5 adds the admin dashboard and permission-checked catalog, inventory, user, inquiry, and role management.
+A monorepo for a designer costume boutique's virtual try-on platform. It contains independently runnable web, mobile, backend, and AI-service projects, plus local PostgreSQL infrastructure. Phase 1 established the application foundations; Phase 2 added the normalized database model, JPA entities, repositories, Flyway migrations, and seed access-control data. Phase 3 added catalog read APIs. Phase 4 adds customer authentication, JWT access tokens, rotating persisted refresh sessions, password recovery, and permission-guarded administration APIs. Phase 5 adds the admin dashboard and permission-checked catalog, inventory, user, inquiry, and role management. Phase 8 adds local image storage, costume galleries, and private customer photo libraries; AI model integration remains future work.
 
 ## Technology stack
 
@@ -13,7 +13,7 @@ A monorepo for a designer costume boutique's virtual try-on platform. It contain
 | AI service | Python 3.11+, FastAPI, Uvicorn |
 | Infrastructure | Docker Compose |
 
-TypeScript is not used. Image upload, favorites, inquiries, virtual try-on, and model integration remain out of scope.
+TypeScript is not used. Cloud image storage, persisted favorites, customer inquiry submission, AI try-on processing, and model integration remain out of scope.
 
 ## Architecture
 
@@ -31,7 +31,7 @@ services/
   backend/             Spring Boot API
   ai/                  FastAPI service foundation
 infrastructure/
-  docker-compose.yml   PostgreSQL 16
+  docker-compose.yml   PostgreSQL 16 and backend with persistent uploads
 docs/
   project-overview.md
   architecture.md
@@ -62,7 +62,7 @@ cp .env.example .env
 
 Change `DB_PASSWORD` and set `JWT_SECRET` in `.env` before running the backend. Generate the JWT secret with `openssl rand -base64 32`. The root `.env` is ignored by Git. Each service also has an `.env.example` with its service-specific settings. Spring Boot reads process environment variables; it does not load a dotenv file by itself. Export the database/auth variables in the shell or use a dotenv loader of your choice when running the backend.
 
-To configure the web client locally, copy `apps/web/.env.example` to `apps/web/.env.local`. That URL is reserved for future API integration.
+To configure the web client locally, copy `apps/web/.env.example` to `apps/web/.env.local`. The shared API base URL should point to the running backend.
 
 ## Start PostgreSQL
 
@@ -104,7 +104,13 @@ cd services/backend
 mvn clean verify
 ```
 
-The health endpoint is `GET http://localhost:8080/api/v1/health`; active category, costume, and available variant GET endpoints are public and provide only catalog data. Authentication endpoints are under `/api/v1/auth`; admin APIs still require bearer authentication and permissions. Spring Boot Actuator health is at `GET http://localhost:8080/actuator/health`. Swagger UI is at `http://localhost:8080/swagger-ui/index.html` and OpenAPI JSON is at `/v3/api-docs`. Flyway applies migrations V1-V12 at backend startup, and Hibernate validates the resulting schema. Configure SMTP for production password reset email; development delivery is for local testing only. Enable development SQL statement logging with `mvn spring-boot:run -Dspring-boot.run.profiles=dev`.
+Alternatively, run the containerized backend (which starts PostgreSQL as a dependency) from the root after setting `DB_PASSWORD` and `JWT_SECRET` in `.env`:
+
+```bash
+docker compose -f infrastructure/docker-compose.yml up -d --build backend
+```
+
+The health endpoint is `GET http://localhost:8080/api/v1/health`; active category, costume, image, and available variant GET endpoints are public and provide catalog data only. Customer photo endpoints require the authenticated owner. Authentication endpoints are under `/api/v1/auth`; admin APIs still require bearer authentication and permissions. Spring Boot Actuator health is at `GET http://localhost:8080/actuator/health`. Swagger UI is at `http://localhost:8080/swagger-ui/index.html` and OpenAPI JSON is at `/v3/api-docs`. Flyway applies migrations V1-V14 at backend startup, and Hibernate validates the resulting schema. Local uploads use `STORAGE_ROOT` and `MAX_FILE_SIZE`; Compose mounts the named `uploads_data` volume. Configure SMTP for production password reset email; development delivery is for local testing only. Enable development SQL statement logging with `mvn spring-boot:run -Dspring-boot.run.profiles=dev`.
 
 ## Run the web application
 
@@ -126,7 +132,7 @@ npm install
 npm start
 ```
 
-Use the Expo terminal prompt to launch an Android/iOS simulator or scan the QR code with Expo Go. React Navigation is intentionally deferred until navigation is needed.
+Copy `apps/mobile/.env.example` to `apps/mobile/.env` and set `EXPO_PUBLIC_API_BASE_URL` to a host reachable from your target device. Android emulators use `http://10.0.2.2:8080/api/v1`; physical devices need the development computer's LAN IP. Use the Expo terminal prompt to launch a simulator or scan the QR code with Expo Go. See [apps/mobile/README.md](apps/mobile/README.md) for auth, API, and platform setup details.
 
 ## Run the AI service
 
@@ -166,19 +172,24 @@ Check `GET http://localhost:8001/health`. Set `AI_SERVICE_PORT` to choose anothe
 | `JWT_SECRET` | Backend | Required; generate with `openssl rand -base64 32` |
 | `JWT_ACCESS_EXPIRATION` | Backend | `900000` ms (15 minutes) |
 | `JWT_REFRESH_EXPIRATION` | Backend | `604800000` ms (7 days) |
+| `STORAGE_ROOT` | Backend | `./storage` for host-run; `/app/storage` in Compose |
+| `MAX_FILE_SIZE` | Backend | `10485760` bytes (10 MiB) |
+| `MAX_REQUEST_SIZE` | Backend | `11534336` bytes |
 | `CORS_ALLOWED_ORIGINS` | Backend | Comma-separated exact browser origins |
 | `AUTH_COOKIE_SECURE` | Backend | `true` in production; `false` only for local HTTP |
 | `PASSWORD_RESET_DELIVERY` | Backend | `development` for local token response, `smtp` for email |
 | `PASSWORD_RESET_EXPIRATION` | Backend | `900000` ms (15 minutes) |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` | Backend | SMTP connection for production reset email |
 | `NEXT_PUBLIC_API_BASE_URL` | Web | `http://localhost:8080/api/v1` |
+| `EXPO_PUBLIC_API_BASE_URL` | Mobile | Android emulator default: `http://10.0.2.2:8080/api/v1`; set a LAN URL for physical devices |
+| `EXPO_PUBLIC_SHOP_ADDRESS`, `EXPO_PUBLIC_SHOP_PHONE`, `EXPO_PUBLIC_SHOP_EMAIL` | Mobile | Optional public boutique contact details |
 | `AI_SERVICE_PORT` | AI service | `8001` |
 
 The web API URL configures the admin panel Axios client. Set the backend's `CORS_ALLOWED_ORIGINS` to the exact frontend origin and use `AUTH_COOKIE_SECURE=false` only for local HTTP development. Never put production credentials in tracked files.
 
 ## Phase status
 
-The web application includes the customer storefront and a permission-aware admin workspace. Storefront catalog reads are public; account registration creates CUSTOMER users. Favorites are not persisted, customer inquiry submission is unavailable, and try-on only previews a local photo without upload or AI processing. The admin panel supports catalog and inventory management, user administration, inquiry status updates, and super-admin role permission assignments. No default administrator credentials are seeded; an operator must provision an administrator. The mobile app remains a foundation screen. Recent activity, configurable settings, image uploads, customer favorites, and AI model functionality are not implemented; see [docs/customer-storefront.md](docs/customer-storefront.md) and [docs/admin-panel.md](docs/admin-panel.md). The backend exposes health, public catalog reads, registration/login/current-user APIs, refresh rotation/logout, password reset, admin management endpoints, and permission-filtered dashboard counts. Refresh tokens are stored hashed and rotated, and reuse revokes their full token family. Web refresh cookies use `HttpOnly`, `SameSite=Strict`, and CSRF double-submit validation; mobile clients receive refresh tokens in JSON for OS secure storage. The AI service exposes a health check. Cloud photo storage and AI model functionality remain out of scope.
+The web application includes the customer storefront and permission-aware admin workspace. The mobile application includes a customer storefront, account flows, and local try-on preparation with an opt-in private photo library. Favorites are not persisted, customer inquiry submission is unavailable, and AI try-on processing is not implemented. The admin panel supports catalog and inventory management, costume image galleries, user administration, inquiry status updates, and super-admin role permission assignments. No default administrator credentials are seeded; an operator must provision an administrator. Recent activity is recorded for admin actions; customer favorites, customer inquiry submission, and AI model functionality are not implemented; see [docs/customer-storefront.md](docs/customer-storefront.md), [docs/admin-panel.md](docs/admin-panel.md), [docs/image-storage.md](docs/image-storage.md), and [apps/mobile/README.md](apps/mobile/README.md). The backend exposes health, public catalog reads, registration/login/current-user APIs, refresh rotation/logout, password reset, admin management endpoints, image upload and gallery APIs, private customer photo APIs, and permission-filtered dashboard counts. Refresh tokens are stored hashed and rotated, and reuse revokes their full token family. Web refresh cookies use `HttpOnly`, `SameSite=Strict`, and CSRF double-submit validation; mobile clients receive refresh tokens in JSON for OS secure storage. The AI service exposes a health check. Cloud photo storage and AI model functionality remain out of scope.
 
-The backend tests include an isolated PostgreSQL 16 instance that runs all Flyway migrations, validates the JPA schema, and checks persistence, authentication, token rotation/reuse, password reset, CSRF, and permission boundaries. Run them with `cd services/backend && mvn test`.
+The backend tests include an isolated PostgreSQL 16 instance that runs all Flyway migrations, validates the JPA schema, and checks persistence, authentication, token rotation/reuse, password reset, CSRF, permission boundaries, and image storage. Run them with `cd services/backend && mvn test`.
 # designer-costume-app

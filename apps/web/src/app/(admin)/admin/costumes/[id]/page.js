@@ -6,8 +6,10 @@ import Link from "next/link";
 import DataTable from "@/components/common/DataTable";
 import PageHeader from "@/components/common/PageHeader";
 import ProtectedRoute from "@/components/common/ProtectedRoute";
+import CostumeImageGallery from "@/components/admin/CostumeImageGallery";
 import { getApiErrorMessage } from "@/services/api/apiClient";
 import {
+  getImageAssetUrl,
   getAdminCostume,
   getAdminCostumeVariants,
   getColors,
@@ -167,11 +169,12 @@ export default function CostumeDetailPage() {
               </dl>
             </div>
             {costume.primaryImageUrl && (
-              <a className="costume-image-link" href={costume.primaryImageUrl} target="_blank" rel="noreferrer">
+              <a className="costume-image-link" href={getImageAssetUrl(costume.primaryImageUrl)} target="_blank" rel="noreferrer">
                 View primary image <span aria-hidden="true">↗</span>
               </a>
             )}
           </section>
+          <CostumeImageGallery costumeId={id} canUpdate={can("COSTUME_UPDATE")} />
           <section className="content-card variants-card">
             <div className="section-heading">
               <div><p className="eyebrow">INVENTORY SNAPSHOT</p><h2>Available variants</h2></div>

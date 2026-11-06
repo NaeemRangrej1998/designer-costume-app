@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import VariantSelector from "./VariantSelector";
 import StorePageHeading from "./StorePageHeading";
 import { StoreEmpty, StoreError, StoreLoading } from "./StoreStates";
 import { getApiErrorMessage } from "@/services/api/apiClient";
-import { getCostume, getCostumeVariants } from "@/services/api/costumeApi";
+import { getCostume, getCostumeImages, getCostumeVariants, getImageAssetUrl } from "@/services/api/costumeApi";
 
 function priceText(price) {
   if (price == null || price === "") return null;
@@ -22,6 +23,8 @@ export default function CostumeDetails() {
   const router = useRouter();
   const [costume, setCostume] = useState(null);
   const [variants, setVariants] = useState([]);
+  const [images, setImages] = useState([]);
+  const [selectedImage, setSelectedImage] = useState(null);
   const [selectedVariant, setSelectedVariant] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -34,10 +37,13 @@ export default function CostumeDetails() {
     Promise.all([
       getCostume(id, controller.signal),
       getCostumeVariants(id, controller.signal),
+      getCostumeImages(id, controller.signal),
     ])
-      .then(([costumeData, availableVariants]) => {
+      .then(([costumeData, availableVariants, costumeImages]) => {
         setCostume(costumeData);
         setVariants(availableVariants);
+        setImages(costumeImages);
+        setSelectedImage(costumeImages.find((image) => image.primary) || costumeImages[0] || null);
         setSelectedVariant(availableVariants[0] || null);
       })
       .catch((requestError) => {
@@ -51,6 +57,7 @@ export default function CostumeDetails() {
 
   const price = priceText(selectedVariant?.price ?? costume?.basePrice);
   const categoryLabel = useMemo(() => costume?.categoryName || "Designer occasionwear", [costume]);
+  const mainImageUrl = selectedImage?.imageUrl || costume?.primaryImageUrl;
 
   function beginTryOn() {
     if (!selectedVariant || !selectedVariant.available) {
@@ -70,15 +77,20 @@ export default function CostumeDetails() {
       <div className="product-layout">
         <div className="product-gallery">
           <div
-            className={`product-main-image ${costume.primaryImageUrl ? "product-main-image-real" : ""}`}
-            style={costume.primaryImageUrl ? { backgroundImage: `url("${costume.primaryImageUrl}")` } : undefined}
-            role={costume.primaryImageUrl ? "img" : undefined}
-            aria-label={costume.primaryImageUrl ? costume.name : undefined}
+            className={`product-main-image ${mainImageUrl ? "product-main-image-real" : ""}`}
+            style={mainImageUrl ? { backgroundImage: `url("${getImageAssetUrl(mainImageUrl)}")` } : undefined}
+            role={mainImageUrl ? "img" : undefined}
+            aria-label={mainImageUrl ? costume.name : undefined}
           >
-            {!costume.primaryImageUrl && <span>IMAGE<br />COMING SOON</span>}
+            {!mainImageUrl && <span>IMAGE<br />COMING SOON</span>}
             <span className="product-image-label">THE BOUTIQUE COLLECTION</span>
           </div>
-          <p className="gallery-note">Additional gallery images are not available in the current catalog API.</p>
+          {images.length > 1 && <div className="product-gallery-thumbnails" aria-label="Costume images">
+            {images.map((image) => <button key={image.id} type="button" className={selectedImage?.id === image.id ? "selected" : ""} onClick={() => setSelectedImage(image)} aria-label={`View ${image.originalFileName || "costume image"}`}>
+              <Image src={getImageAssetUrl(image.imageUrl)} alt="" width={64} height={80} unoptimized />
+            </button>)}
+          </div>}
+          {images.length === 0 && <p className="gallery-note">No additional gallery images are available.</p>}
         </div>
         <section className="product-information">
           <span className="store-eyebrow">{categoryLabel}</span>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getImageAssetUrl } from "@/services/api/costumeApi";
 
 function formatPrice(price) {
   if (price === null || price === undefined || price === "") return null;
@@ -14,7 +15,7 @@ export default function CostumeCard({ costume }) {
     <article className="costume-card">
       <Link className="costume-card-image" href={`/costumes/${costume.id}`} aria-label={`View ${costume.name}`}>
         {costume.primaryImageUrl
-          ? <span className="costume-image-real" role="img" aria-label={costume.name} style={{ backgroundImage: `url("${costume.primaryImageUrl}")` }} />
+          ? <span className="costume-image-real" role="img" aria-label={costume.name} style={{ backgroundImage: `url("${getImageAssetUrl(costume.primaryImageUrl)}")` }} />
           : <span className="costume-image-placeholder"><span>IMAGE<br />COMING SOON</span></span>}
         <span className="costume-card-badge">BOUTIQUE EDIT</span>
       </Link>

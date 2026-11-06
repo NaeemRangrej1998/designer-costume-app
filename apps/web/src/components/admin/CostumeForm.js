@@ -26,6 +26,7 @@ export default function CostumeForm({ costumeId }) {
   const [loading, setLoading] = useState(Boolean(costumeId));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const uploadedPrimaryImage = form.primaryImageUrl.startsWith("/api/v1/costumes/");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -89,7 +90,7 @@ export default function CostumeForm({ costumeId }) {
       <PageHeader
         eyebrow="CATALOG"
         title={costumeId ? "Edit costume" : "Create costume"}
-        description="Manage the catalog record and its primary image URL."
+        description="Manage the catalog record and its primary image."
       />
       {loading ? <div className="inline-state"><span className="spinner" />Loading costume…</div> : (
         <section className="content-card form-card">
@@ -119,9 +120,9 @@ export default function CostumeForm({ costumeId }) {
                 <textarea className="form-control" name="description" value={form.description} onChange={updateField} maxLength={5000} rows={4} />
               </label>
               <label className="form-field form-field-wide">
-                <span>Primary image URL</span>
-                <input className="form-control" name="primaryImageUrl" type="url" value={form.primaryImageUrl} onChange={updateField} maxLength={2048} />
-                <small>Enter an HTTPS image URL. File uploads are not configured.</small>
+                <span>Primary image</span>
+                <input className="form-control" name="primaryImageUrl" type={uploadedPrimaryImage ? "text" : "url"} value={form.primaryImageUrl} onChange={updateField} maxLength={2048} readOnly={uploadedPrimaryImage} />
+                <small>{uploadedPrimaryImage ? "This uploaded image is managed in the costume gallery below the details page." : "Enter an HTTPS image URL or upload and manage images in the costume gallery."}</small>
               </label>
               <label className="form-field checkbox-field">
                 <input name="active" type="checkbox" checked={form.active} onChange={updateField} />

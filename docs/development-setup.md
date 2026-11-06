@@ -13,11 +13,19 @@ At the project root, copy `.env.example` to `.env` and set a non-production loca
 
 ## Start each project
 
-Start the database from the root:
+Start PostgreSQL independently from the root:
 
 ```bash
 docker compose -f infrastructure/docker-compose.yml up -d db
 ```
+
+For a containerized backend with a persistent upload volume, set `DB_PASSWORD` and `JWT_SECRET` in the root `.env`, then run:
+
+```bash
+docker compose -f infrastructure/docker-compose.yml up -d --build
+```
+
+See [Image storage and customer photo privacy](./image-storage.md) for volume, upload, and privacy details.
 
 Run the backend from `services/backend`:
 

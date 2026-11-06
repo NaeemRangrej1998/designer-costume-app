@@ -1,5 +1,53 @@
 import { apiClient } from "./apiClient";
 
+export async function getCostumeImages(costumeId, signal) {
+  const response = await apiClient.get(`/costumes/${costumeId}/images`, { signal });
+  return response.data.data;
+}
+
+export async function getAdminCostumeImages(costumeId, signal) {
+  const response = await apiClient.get(`/admin/costumes/${costumeId}/images`, { signal });
+  return response.data.data;
+}
+
+export async function getAdminCostumeImageContent(costumeId, imageId, signal) {
+  const response = await apiClient.get(
+    `/admin/costumes/${costumeId}/images/${imageId}/content`,
+    { signal, responseType: "blob" },
+  );
+  return response.data;
+}
+
+export async function uploadAdminCostumeImage(costumeId, file) {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await apiClient.post(`/admin/costumes/${costumeId}/images`, form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data.data;
+}
+
+export async function setAdminPrimaryCostumeImage(costumeId, imageId) {
+  const response = await apiClient.put(`/admin/costumes/${costumeId}/images/${imageId}/primary`);
+  return response.data.data;
+}
+
+export async function reorderAdminCostumeImages(costumeId, imageIds) {
+  const response = await apiClient.put(`/admin/costumes/${costumeId}/images/order`, { imageIds });
+  return response.data.data;
+}
+
+export async function deleteAdminCostumeImage(costumeId, imageId) {
+  await apiClient.delete(`/admin/costumes/${costumeId}/images/${imageId}`);
+}
+
+export function getImageAssetUrl(imageUrl) {
+  if (!imageUrl) return "";
+  if (/^https?:\/\//i.test(imageUrl)) return imageUrl;
+  const baseUrl = apiClient.defaults.baseURL || "http://localhost:8080/api/v1";
+  return new URL(imageUrl, `${baseUrl.replace(/\/+$/, "")}/`).toString();
+}
+
 export async function getCostumes({
   page = 0,
   size = 10,

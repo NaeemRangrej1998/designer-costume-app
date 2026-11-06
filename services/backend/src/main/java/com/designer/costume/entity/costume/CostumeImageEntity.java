@@ -46,4 +46,22 @@ public class CostumeImageEntity extends CreatedAtEntity {
 
     @Column(name = "is_primary", nullable = false)
     private boolean primary;
+
+    @Column(name = "storage_key", length = 512)
+    private String storageKey;
+
+    @Column(name = "original_file_name", length = 255)
+    private String originalFileName;
+
+    @Column(name = "mime_type", length = 100)
+    private String mimeType;
+
+    @Column(name = "file_size")
+    private Long fileSize;
+
+    @Column(name = "image_width")
+    private Integer imageWidth;
+
+    @Column(name = "image_height")
+    private Integer imageHeight;
 }

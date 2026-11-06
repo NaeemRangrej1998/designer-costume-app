@@ -329,6 +329,20 @@ public class AdminCatalogService {
                 .filter(CostumeImageEntity::isPrimary)
                 .findFirst()
                 .orElse(null);
+        if (normalizedUrl != null && normalizedUrl.startsWith("/api/v1/costumes/")) {
+            CostumeImageEntity selected = images.stream()
+                    .filter(image -> normalizedUrl.equals(image.getImageUrl()))
+                    .findFirst()
+                    .orElseThrow(() -> new BadRequestException(
+                            "Select an existing uploaded image from the costume gallery"));
+            images.forEach(image -> image.setPrimary(false));
+            costumeImageRepository.flush();
+            selected.setPrimary(true);
+            return;
+        }
+        if (primary != null && primary.getStorageKey() != null) {
+            throw new BadRequestException("Manage uploaded primary images through the costume gallery");
+        }
         images.forEach(image -> image.setPrimary(false));
         if (normalizedUrl == null) {
             return;

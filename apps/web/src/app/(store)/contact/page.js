@@ -26,6 +26,7 @@ export default function ContactPage() {
           <div className="contact-form">
             <label><span>Your name</span><input className="store-input" disabled placeholder="Name" /></label>
             <label><span>Email address</span><input className="store-input" disabled placeholder="Email" /></label>
+            <label><span>Phone number</span><input className="store-input" disabled placeholder="Phone (optional)" /></label>
             <label><span>Your message</span><textarea className="store-input" disabled rows="5" placeholder="Tell us what you’re looking for" /></label>
             <button type="button" className="store-button store-button-dark" disabled>Inquiry submission unavailable</button>
             <p>The backend does not currently have an inquiry submission API. Your message will not be sent or saved.</p>

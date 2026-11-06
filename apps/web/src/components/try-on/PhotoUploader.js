@@ -38,7 +38,7 @@ export default function PhotoUploader({ file, onChange }) {
 
   return (
     <div className="photo-uploader">
-      {previewUrl ? (
+      {file && previewUrl ? (
         <div className="photo-preview-wrap">
           <Image className="photo-preview" src={previewUrl} alt="Selected photo preview" width={720} height={900} unoptimized />
           <div className="photo-preview-controls">
